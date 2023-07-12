@@ -14,6 +14,7 @@ import { RegisterUserDto } from "./dto/register-user.dto";
 export class AuthController {
   constructor(private authService: AuthService) {}
   @Post("register")
+  @UsePipes(ValidationPipe)
   register(@Body() registerUserDto: RegisterUserDto): Promise<User> {
     return this.authService.register(registerUserDto);
   }

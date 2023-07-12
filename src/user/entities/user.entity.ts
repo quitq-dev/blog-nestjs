@@ -11,10 +11,10 @@ export class User {
   id: number;
 
   @Column()
-  firstName: string;
+  first_name: string;
 
   @Column()
-  lastName: string;
+  last_name: string;
 
   @Column({ unique: true })
   email: string;
@@ -25,7 +25,7 @@ export class User {
   @Column({ default: 1 })
   status: number;
 
-  @Column()
+  @Column({ nullable: true, default: null })
   refresh_token: string;
 
   @CreateDateColumn()

@@ -1,4 +1,10 @@
-import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  InternalServerErrorException,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
@@ -6,7 +12,6 @@ import { User } from "src/user/entities/user.entity";
 import { Repository } from "typeorm";
 import { LoginUserDto } from "./dto/login-user.dto";
 import { RegisterUserDto } from "./dto/register-user.dto";
-import { ConfigService } from "@nestjs/config";
 
 @Injectable()
 export class AuthService {
@@ -27,6 +32,7 @@ export class AuthService {
       return await this.userRepository.save(newData);
     } catch (error: any) {
       console.error(error);
+      throw new InternalServerErrorException(error);
     }
   }
 
