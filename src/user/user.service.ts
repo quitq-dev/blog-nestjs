@@ -1,17 +1,29 @@
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
 import * as bcrypt from "bcrypt";
 import { DeleteResult, Like, Repository, UpdateResult } from "typeorm";
 import { CreateUserDto } from "./dto/create-user.dto";
+import { FilterUserDto } from "./dto/filter-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { User } from "./entities/user.entity";
-import { FilterUserDto } from "./dto/filter-user.dto";
 
 @Injectable()
 export class UserService {
   constructor(
-    @InjectRepository(User) private userRepository: Repository<User>
+    @InjectRepository(User) private userRepository: Repository<User>,
+    private configService: ConfigService
   ) {}
+
+  private readonly s3Client = new S3Client({
+    region: this.configService.getOrThrow("AWS_S3_REGION"),
+    credentials: {
+      accessKeyId: this.configService.getOrThrow("AWS_ACCESS_KEY_ID"),
+      secretAccessKey: this.configService.getOrThrow("AWS_SECRET_ACCESS_KEY"),
+    },
+  });
+
   async index(query: FilterUserDto): Promise<any> {
     const page = Number(query.page) || 1;
     const items_per_page = Number(query.items_per_page) || 10;
@@ -77,5 +89,20 @@ export class UserService {
 
   async delete(id: number): Promise<DeleteResult> {
     return await this.userRepository.delete(id);
+  }
+
+  async upload(fileName: string, file: Buffer): Promise<any> {
+    const putPayload = {
+      Bucket: "nestjs-upload-file",
+      Key: fileName,
+      Body: file,
+    };
+    return await this.s3Client.send(new PutObjectCommand(putPayload));
+  }
+
+  async uploadAvatar(req: any, fileName: string, file: Buffer): Promise<any> {
+    const { id } = req.data_user;
+    await this.upload(fileName, file);
+    return await this.userRepository.update(id, { avatar: fileName });
   }
 }

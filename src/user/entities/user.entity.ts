@@ -28,6 +28,9 @@ export class User {
   @Column({ nullable: true, default: null })
   refresh_token: string;
 
+  @Column({ nullable: true, default: null })
+  avatar: string;
+
   @CreateDateColumn()
   created_at: Date;
 
