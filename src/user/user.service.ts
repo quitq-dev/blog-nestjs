@@ -1,4 +1,9 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { InjectRepository } from "@nestjs/typeorm";
@@ -8,6 +13,7 @@ import { CreateUserDto } from "./dto/create-user.dto";
 import { FilterUserDto } from "./dto/filter-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { User } from "./entities/user.entity";
+import { STORAGE } from "src/config/storage";
 
 @Injectable()
 export class UserService {
@@ -43,6 +49,7 @@ export class UserService {
         "id",
         "first_name",
         "last_name",
+        "avatar",
         "email",
         "status",
         "created_at",
@@ -54,8 +61,10 @@ export class UserService {
     const nextPage = page + 1 > lastPage ? null : page + 1;
     const prevPage = page - 1 < 1 ? null : page - 1;
 
+    const resultData = await this.loadDataAssets(result);
+
     return {
-      data: result,
+      data: resultData,
       total,
       currentPage: page,
       nextPage,
@@ -92,10 +101,13 @@ export class UserService {
   }
 
   async upload(fileName: string, file: Buffer): Promise<any> {
+    const extension = fileName.match(/\.([^.]+)$/)[1];
+    const fileType = `image/${extension}`;
     const putPayload = {
-      Bucket: "nestjs-upload-file",
+      Bucket: STORAGE.BUCKET_NAME,
       Key: fileName,
       Body: file,
+      ContentType: fileType,
     };
     return await this.s3Client.send(new PutObjectCommand(putPayload));
   }
@@ -104,5 +116,54 @@ export class UserService {
     const { id } = req.data_user;
     await this.upload(fileName, file);
     return await this.userRepository.update(id, { avatar: fileName });
+  }
+
+  async getObjectSignedUrl(params: any) {
+    const { key } = params;
+    const command = new GetObjectCommand({
+      Bucket: STORAGE.BUCKET_NAME,
+      Key: key,
+    });
+    const result = await getSignedUrl(
+      new S3Client({ region: this.configService.getOrThrow("AWS_S3_REGION") }),
+      command,
+      {
+        expiresIn: STORAGE.IMAGE_EXPIRED_IN,
+      }
+    );
+    return result;
+  }
+
+  async getModelsWithSignedUrl(params: any) {
+    const { key } = params;
+    return new Promise((resolve) => {
+      this.getObjectSignedUrl({ key }).then((data) =>
+        resolve({ ...params, url: data })
+      );
+    });
+  }
+
+  async loadDataAssets(models: any[]) {
+    const dataResult: any[] = [...models];
+    const promises: any[] = [];
+    models.map((user, index) => {
+      if (user.avatar) {
+        const payload = {
+          index,
+          key: user.avatar,
+        };
+        promises.push(this.getModelsWithSignedUrl(payload));
+      }
+      return user;
+    });
+
+    await Promise.all(promises).then((dataAssets) => {
+      dataAssets.map((item: any) => {
+        dataResult[item.index].avatarUrl = item.url;
+        return item;
+      });
+    });
+
+    return dataResult;
   }
 }
